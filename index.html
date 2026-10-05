@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>과학도우미 교실 태블릿 알리미</title>
+    <style>
+        :root {
+            --primary: #F9C51D;
+            --bg-color: #FDF9F1;
+            --text-dark: #333;
+            --text-light: #fff;
+            --border: #F0D060;
+        }
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: var(--bg-color); margin: 0; padding: 0; }
+        
+        /* 상단 헤더 */
+        .header { background-color: var(--primary); padding: 15px 30px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { margin: 0; font-size: 24px; color: var(--text-dark); display: flex; align-items: center; gap: 10px; }
+        .badge-sync { background-color: #E0F5E9; color: #15803D; font-size: 12px; padding: 4px 10px; border-radius: 20px; font-weight: bold; }
+        
+        /* 시작 버튼 (오디오 권한용) */
+        #start-btn { background: #d93025; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+        /* 메인 컨테이너 */
+        .container { max-width: 1000px; margin: 20px auto; padding: 0 20px; }
+
+        /* 선생님 전송 패널 (테스트용) */
+        .teacher-panel { background: white; padding: 15px; border-radius: 10px; border: 2px dashed #ccc; margin-bottom: 20px; }
+        .teacher-panel select, .teacher-panel input, .teacher-panel button { padding: 8px; font-size: 15px; margin-right: 5px; }
+
+        /* 탭 메뉴 */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { padding: 12px 30px; font-size: 18px; font-weight: bold; background: #eee; border: none; border-radius: 10px 10px 0 0; cursor: pointer; transition: 0.2s; position: relative; }
+        .tab.active { background: var(--primary); color: #000; }
+        .tab-badge { position: absolute; top: -5px; right: -5px; background: red; color: white; font-size: 12px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; display: none;}
+
+        /* 알림 카드 리스트 */
+        .message-list { display: flex; flex-direction: column; gap: 20px; }
+        .message-card { background: white; border: 2px solid var(--border); border-radius: 15px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .card-header { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 14px; color: #666; font-weight: bold;}
+        .card-header .type { background: var(--bg-color); padding: 5px 15px; border-radius: 20px; color: #000; border: 1px solid var(--border); }
+        .card-content { font-size: 22px; font-weight: bold; line-height: 1.5; margin-bottom: 30px; color: #111; }
+        
+        /* 답장 영역 */
+        .reply-section { background: var(--bg-color); padding: 20px; border-radius: 10px; }
+        .reply-title { font-size: 14px; font-weight: bold; color: #c25900; margin-bottom: 15px; }
+        .quick-replies { display: flex; gap: 10px; margin-bottom: 15px; }
+        .quick-replies button { flex: 1; padding: 12px; border: 1px solid #ccc; background: white; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.1s; }
+        .quick-replies button:hover { border-color: var(--primary); background: #fffcf0; }
+        .custom-reply { display: flex; gap: 10px; }
+        .custom-reply input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; }
+        .custom-reply button { padding: 0 20px; background: #666; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+
+        /* 대형 팝업 (모달) */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 9999; }
+        .modal-content { background: var(--primary); width: 80%; max-width: 600px; padding: 50px 30px; text-align: center; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: shake 0.5s infinite alternate; }
+        .modal-content h2 { font-size: 40px; margin: 0 0 20px 0; color: #d93025; }
+        .modal-content p { font-size: 24px; font-weight: bold; margin-bottom: 40px; }
+        .modal-content button { background: #000; color: #fff; border: none; padding: 20px 50px; font-size: 24px; font-weight: bold; border-radius: 10px; cursor: pointer; }
+
+        @keyframes shake { from { transform: rotate(-2deg) scale(1); } to { transform: rotate(2deg) scale(1.02); } }
+        
+        .replied-status { color: #1a73e8; font-weight: bold; font-size: 18px; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>교실 태블릿 알리미 <span class="badge-sync">● 실시간 동기화됨</span></h1>
+        <button id="start-btn" onclick="startApp()">🔔 알림 소리 활성화 (최초 1회 클릭)</button>
+    </div>
+
+    <div class="container">
+        <!-- 선생님 모드 (알림 전송) -->
+        <div class="teacher-panel">
+            <strong>👨‍🏫 선생님 전송 관리 (테스트용)</strong><br><br>
+            <select id="classSelect">
+                <option value="6">6반</option>
+                <option value="8">8반</option>
+                <option value="10">10반</option>
+            </select>
+            <input type="text" id="msgInput" placeholder="알림 내용을 입력하세요" style="width: 300px;">
+            <button onclick="sendMessage()">알림 전송하기</button>
+        </div>
+
+        <!-- 탭 메뉴 -->
+        <div class="tabs">
+            <button class="tab active" onclick="changeTab('6')">6반 <span class="tab-badge" id="badge-6">0</span></button>
+            <button class="tab" onclick="changeTab('8')">8반 <span class="tab-badge" id="badge-8">0</span></button>
+            <button class="tab" onclick="changeTab('10')">10반 <span class="tab-badge" id="badge-10">0</span></button>
+        </div>
+
+        <!-- 알림이 렌더링될 영역 -->
+        <div id="messageList" class="message-list">
+            <!-- 자바스크립트로 카드가 누적 생성됩니다. -->
+        </div>
+    </div>
+
+    <!-- 대형 팝업 모달 -->
+    <div class="modal-overlay" id="alertModal">
+        <div class="modal-content">
+            <h2>🚨 새 알림 도착! 🚨</h2>
+            <p>선생님의 새로운 공지사항이 있습니다.</p>
+            <button onclick="closeModal()">확인했습니다 (소리 끄기)</button>
+        </div>
+    </div>
+
+    <!-- 파이어베이스 V9 설정 및 로직 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
+
+        // 선생님이 제공해주신 설정값 적용
+        const firebaseConfig = {
+            apiKey: "AIzaSyCgAvzXn5V_MA1jqEJuvREI4caqBlv35U4",
+            authDomain: "jari-5c613.firebaseapp.com",
+            projectId: "jari-5c613",
+            storageBucket: "jari-5c613.firebasestorage.app",
+            messagingSenderId: "632470920233",
+            appId: "1:632470920233:web:9b0e50653420fdd903d038",
+            measurementId: "G-ZG1CGG977P"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        let currentTab = '6';
+        let isAudioEnabled = false;
+        let audioContext;
+        let oscillator;
+        let alarmInterval;
+        let allMessages = [];
+
+        // 오디오 시스템 활성화 (브라우저 정책상 버튼 클릭 필요)
+        window.startApp = function() {
+            isAudioEnabled = true;
+            document.getElementById('start-btn').innerText = "✅ 소리 켜짐 (대기중)";
+            document.getElementById('start-btn').style.background = "#15803D";
+            document.getElementById('start-btn').style.animation = "none";
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        // 비상 차임벨 소리 생성 (무한 반복)
+        function playSiren() {
+            if (!isAudioEnabled || oscillator) return;
+            oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.type = 'square';
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.start();
+            
+            let toggle = true;
+            alarmInterval = setInterval(() => {
+                oscillator.frequency.setValueAtTime(toggle ? 600 : 800, audioContext.currentTime);
+                toggle = !toggle;
+            }, 300);
+        }
+
+        function stopSiren() {
+            if (oscillator) {
+                clearInterval(alarmInterval);
+                oscillator.stop();
+                oscillator.disconnect();
+                oscillator = null;
+            }
+        }
+
+        window.closeModal = function() {
+            document.getElementById('alertModal').style.display = 'none';
+            stopSiren();
+        }
+
+        // 선생님 메시지 전송 기능
+        window.sendMessage = async function() {
+            const classNum = document.getElementById('classSelect').value;
+            const text = document.getElementById('msgInput').value;
+            if(!text) return alert("내용을 입력하세요.");
+
+            try {
+                await addDoc(collection(db, "science_notices"), {
+                    classId: classNum,
+                    content: text,
+                    status: 'unread',
+                    reply: '',
+                    timestamp: serverTimestamp()
+                });
+                document.getElementById('msgInput').value = '';
+                alert(`${classNum}반에 전송 완료!`);
+            } catch (e) {
+                console.error("전송 에러: ", e);
+                alert("전송 실패. 파이어베이스 데이터베이스 규칙을 확인하세요.");
+            }
+        }
+
+        // 실시간 데이터 수신 (여러 개 누적)
+        const q = query(collection(db, "science_notices"), orderBy("timestamp", "desc"));
+        onSnapshot(q, (snapshot) => {
+            allMessages = [];
+            let newUnreadCount = { '6': 0, '8': 0, '10': 0 };
+            let hasNewAlert = false;
+
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                data.id = doc.id;
+                allMessages.push(data);
+
+                if (data.status === 'unread') {
+                    if (newUnreadCount[data.classId] !== undefined) {
+                        newUnreadCount[data.classId]++;
+                    }
+                    hasNewAlert = true; // 읽지 않은 새 알림이 있으면 팝업
+                }
+            });
+
+            // 뱃지 업데이트
+            ['6', '8', '10'].forEach(c => {
+                const badge = document.getElementById(`badge-${c}`);
+                badge.innerText = newUnreadCount[c];
+                badge.style.display = newUnreadCount[c] > 0 ? 'flex' : 'none';
+            });
+
+            // 학생 화면에 읽지 않은 메시지가 감지되면 팝업 & 소리 실행
+            if (hasNewAlert && isAudioEnabled) {
+                document.getElementById('alertModal').style.display = 'flex';
+                playSiren();
+            }
+
+            renderMessages();
+        });
+
+        // 탭 변경
+        window.changeTab = function(classId) {
+            currentTab = classId;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            renderMessages();
+        }
+
+        // 화면에 알림 카드들 누적 렌더링
+        function renderMessages() {
+            const listDiv = document.getElementById('messageList');
+            listDiv.innerHTML = '';
+
+            const filtered = allMessages.filter(m => m.classId === currentTab);
+            
+            if (filtered.length === 0) {
+                listDiv.innerHTML = '<p style="text-align:center; color:#666; margin-top:50px;">도착한 알림이 없습니다.</p>';
+                return;
+            }
+
+            filtered.forEach(msg => {
+                const timeStr = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '방금 전';
+                
+                let replyHTML = '';
+                if (msg.status === 'replied') {
+                    replyHTML = `<div class="replied-status">✅ 학생 답장 완료: "${msg.reply}"</div>`;
+                } else {
+                    replyHTML = `
+                    <div class="reply-section">
+                        <div class="reply-title">↩️ 선생님께 즉시 답장 보내기</div>
+                        <div class="quick-replies">
+                            <button onclick="sendReply('${msg.id}', '🏃‍♂️ 바로 이동해요')">🏃‍♂️ 바로 이동해요</button>
+                            <button onclick="sendReply('${msg.id}', '⭕ 준비 완료!')">⭕ 준비 완료!</button>
+                            <button onclick="sendReply('${msg.id}', '❓ 질문 있어요')">❓ 질문 있어요</button>
+                            <button onclick="sendReply('${msg.id}', '🆘 도움 필요해요')">🆘 도움 필요해요</button>
+                        </div>
+                        <div class="custom-reply">
+                            <input type="text" id="reply-input-${msg.id}" placeholder="원하는 답장 문구를 직접 적어주세요...">
+                            <button onclick="sendCustomReply('${msg.id}')">전송</button>
+                        </div>
+                    </div>`;
+                }
+
+                const cardHTML = `
+                    <div class="message-card">
+                        <div class="card-header">
+                            <div><span class="type">일반 알림</span> &nbsp; ${timeStr}</div>
+                            ${msg.status === 'unread' ? '<span style="color:#d93025">🔔 확인 대기 중</span>' : '<span style="color:#15803D">✔ 확인 완료</span>'}
+                        </div>
+                        <h2 style="margin-top:0; font-size:28px;">${msg.classId}반 과학도우미</h2>
+                        <div class="card-content">${msg.content}</div>
+                        ${replyHTML}
+                    </div>
+                `;
+                listDiv.innerHTML += cardHTML;
+            });
+        }
+
+        // 답장 전송 기능 (Firestore 업데이트)
+        window.sendReply = async function(docId, replyText) {
+            try {
+                const docRef = doc(db, "science_notices", docId);
+                await updateDoc(docRef, { status: 'replied', reply: replyText });
+                // 답장을 보내면 자동으로 소리/팝업도 종료되도록 처리
+                closeModal(); 
+            } catch (e) {
+                console.error("답장 에러", e);
+            }
+        }
+
+        window.sendCustomReply = function(docId) {
+            const input = document.getElementById(`reply-input-${docId}`);
+            if (input.value.trim() !== '') {
+                sendReply(docId, input.value);
+            }
+        }
+    </script>
+</body>
+</html>
